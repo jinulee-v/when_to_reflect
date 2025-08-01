@@ -10,9 +10,7 @@ import argparse
 from tqdm import tqdm
 from collections import defaultdict
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
-def find_critical_tokens(model: LLM, prompt: str, system_prompt: str = None, threshold: float = 0.95, top_k: int = 5, rollout_n: int = 10) -> dict:
+def find_critical_tokens(model: LLM, prompt: str, system_prompt: str = None, threshold: float = 0.90, top_k: int = 5, rollout_n: int = 10) -> dict:
     # 1. Greedy generation
     logging.info("Running greedy decoding with token probabilities...")
     greedy_result = greedy_decoding_with_tokenprobs(model, prompt, system_prompt=system_prompt, top_k=top_k)
@@ -36,7 +34,7 @@ def find_critical_tokens(model: LLM, prompt: str, system_prompt: str = None, thr
             # Parse the answer between the last \boxed{}
             pattern = re.compile(r'\\boxed\{([^\}]*?)\}', re.DOTALL)
             answers = [
-                pattern.search(partial_response_str + response).group(1) if pattern.search(partial_response_str + response) else None
+                pattern.findall(partial_response_str + response)[-1].group(1) if pattern.search(partial_response_str + response) else None
                 for response in sampling_result
             ]
             for answer in answers:
@@ -84,28 +82,34 @@ def main(args):
 
 
 if __name__ == "__main__":
-    # parser = argparse.ArgumentParser(description="Run VLLM utilities for critical tokens.")
-    # # vLLM args
-    # parser.add_argument("--model", type=str, default="google/gemma-2-2b-it", help="Model name to use with VLLM")
-    # parser.add_argument("--gpu_memory_utilization", type=float, default=0.6, help="GPU memory utilization for VLLM")
-    # # Dataset args
-    # parser.add_argument("--dataset_repo", type=str, default="jinulee-v/reasoning_datasets", help="Dataset name to load")
-    # parser.add_argument("--split", type=str, default="aime2024", help="Dataset split to use")
-    # # Critical token args
-    # parser.add_argument("--top_k", type=int, default=5, help="Number of top tokens to consider for critical token analysis")
-    # parser.add_argument("--rollout_n", type=int, default=10, help="Number of rollouts for critical token analysis")
+    parser = argparse.ArgumentParser(description="Run VLLM utilities for critical tokens.")
+    
+    parser.add_argument("--debug", action="store_true", help="Enable debug mode for more verbose output")
 
-    # args = parser.parse_args()
-    # main(args)
+    # vLLM args
+    parser.add_argument("--model", type=str, default="google/gemma-2-2b-it", help="Model name to use with VLLM")
+    parser.add_argument("--gpu_memory_utilization", type=float, default=0.6, help="GPU memory utilization for VLLM")
+    # Dataset args
+    parser.add_argument("--dataset_repo", type=str, default="jinulee-v/reasoning_datasets", help="Dataset name to load")
+    parser.add_argument("--split", type=str, default="aime2024", help="Dataset split to use")
+    # Critical token args
+    parser.add_argument("--top_k", type=int, default=5, help="Number of top tokens to consider for critical token analysis")
+    parser.add_argument("--rollout_n", type=int, default=10, help="Number of rollouts for critical token analysis")
 
-    model = LLM(model="google/gemma-2-2b-it", trust_remote_code=True, gpu_memory_utilization=0.6, max_model_len=4096)
-    print(find_critical_tokens(
-        model=model,
-        prompt=r"""Let $x,y$ and $z$ be positive real numbers that satisfy the following system of equations:
-\[\log_2\left({x \over yz}\right) = {1 \over 2}\]
-\[\log_2\left({y \over xz}\right) = {1 \over 3}\]
-\[\log_2\left({z \over xy}\right) = {1 \over 4}\]
-Then the value of $\left|\log_2(x^4y^3z^2)\right|$ is $\tfrac{m}{n}$ where $m$ and $n$ are relatively prime positive integers. Find $m+n$.""",
-        threshold=0.95,
-        system_prompt=SYSTEM_PROMPT_AIME,
-    ))
+    args = parser.parse_args()
+
+    if args.debug:
+        logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+        model = LLM(model="google/gemma-2-2b-it", trust_remote_code=True, gpu_memory_utilization=0.6, max_model_len=4096)
+        print(find_critical_tokens(
+            model=model,
+            prompt=r"""Let $x,y$ and $z$ be positive real numbers that satisfy the following system of equations:
+    \[\log_2\left({x \over yz}\right) = {1 \over 2}\]
+    \[\log_2\left({y \over xz}\right) = {1 \over 3}\]
+    \[\log_2\left({z \over xy}\right) = {1 \over 4}\]
+    Then the value of $\left|\log_2(x^4y^3z^2)\right|$ is $\tfrac{m}{n}$ where $m$ and $n$ are relatively prime positive integers. Find $m+n$.""",
+            threshold=0.95,
+            system_prompt=SYSTEM_PROMPT_AIME,
+        ))
+    else:
+        main(args)

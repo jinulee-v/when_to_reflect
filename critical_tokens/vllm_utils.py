@@ -78,14 +78,13 @@ def sampling_from_middle(
         max_tokens=None
     )
 
-    responses = model.generate(prompts=TokensPrompt(prompt_token_ids=tokens), sampling_params=sampling_params, use_tqdm=False)
+    responses = model.generate(prompts=TokensPrompt(prompt_token_ids=tokens), sampling_params=sampling_params, use_tqdm=False)[0].outputs
     
     # Return response strings
     response_strs = []
     for response in responses:
-        output = response.outputs[0].text
-        response_strs.append(output)
-    
+        response_strs.append(response.text)
+
     return {
         "response_strs": response_strs
     }
