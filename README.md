@@ -10,8 +10,8 @@ vi .env # enter your HF access token
 ## Find critical tokens
 
 ```sh
-python find_critical_tokens.py --debug
-# python find_critical_tokens.py --model HF_MODEL_ID --dataset HF_DATASET_ID # TODO
+python find_critical_tokens.py --debug # testing if the code works!
+# python find_critical_tokens.py --model HF_MODEL_ID --dataset {gsm8k, gpqa-diamond, aime2024}
 ```
 
 # Notes
