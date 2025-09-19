@@ -46,7 +46,7 @@ def find_critical_tokens(model: LLM, prompt: str, system_prompt: str = None, thr
             tail = mid
         else:
             head = mid + 1
-    head -= 1 # head is the index we substitute top_k random tokens. Critical token is the one at `head-1` by definition
+    # head -= 1 # head is the index we substitute top_k random tokens. Critical token is the one at `head-1` by definition
     return {
         "greedy_result": greedy_result,
         "critical_token_index": head,
