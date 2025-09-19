@@ -1,4 +1,5 @@
 from vllm import LLM, SamplingParams, TokensPrompt
+from transformers import AutoConfig
 
 from typing import *
 import math
@@ -20,12 +21,13 @@ def greedy_decoding_with_tokenprobs(
             {"role": "user", "content": prompt}
         ]
     tokens = model.get_tokenizer().apply_chat_template(chat, add_generation_prompt=True)
+    print(tokens)
 
     sampling_params = SamplingParams(
         temperature=0.0,
         stop=None,
         logprobs=top_k,
-        max_tokens=None
+        max_tokens=model.get_tokenizer().model_max_length - len(tokens),
     )
 
     response = model.generate(prompts=TokensPrompt(prompt_token_ids=tokens), sampling_params=sampling_params, use_tqdm=False)[0]
@@ -75,7 +77,7 @@ def sampling_from_middle(
     sampling_params = SamplingParams(
         n=n, # independently sample n responses.
         temperature=temperature,
-        max_tokens=None
+        max_tokens=model.get_tokenizer().model_max_length - len(tokens),
     )
 
     responses = model.generate(prompts=TokensPrompt(prompt_token_ids=tokens), sampling_params=sampling_params, use_tqdm=False)[0].outputs
