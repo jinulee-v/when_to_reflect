@@ -6,3 +6,5 @@ pyvenv.cfg
 __pycache__
 
 .env
+.log
+.out
