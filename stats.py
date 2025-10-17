@@ -6,20 +6,6 @@ import matplotlib.pyplot as plt
 import os
 import numpy as np
 
-EXAMPLE = {
-  "prompt": "Let $\\omega \\neq 1$ be a 13th root of unity. Find the remainder when \n\\[ \\prod_{k=0}^{12}(2 - 2\\omega^k + \\omega^{2k}) \\] is divided by 1000.",
-  "problem_id": "aime2024-29",
-  "greedy_output_len": 279,
-  "greedy_output": "Here's how to solve the problem:\n\n**Understanding the Problem**\n\nWe're given a product of terms involving complex numbers and asked to find the remainder when this product is divided by 1000.  The key is to recognize that the problem involves roots of unity and their properties.\n\n**Key Properties of Roots of Unity**\n\n* **Geometric Interpretation:**  The roots of unity are the complex numbers that satisfy the equation  *z*<sup>n</sup> = 1.  They represent the points on the unit circle in the complex plane.\n* **Sum of Roots:** The sum of the roots of unity is 0.\n* **Product of Roots:** The product of the roots of unity is 1.\n\n**Solution**\n\n1. **Simplify the Product:**  We can simplify the product by expanding it and using the properties of roots of unity.  \n\n2. **Apply Properties:**  We'll use the fact that the roots of unity have specific properties and simplify the expression.\n\n3. **Find the Remainder:**  After simplifying, we'll find the remainder when the simplified expression is divided by 1000.\n\n**Let me know if you'd like me to walk through the detailed steps of the solution.** \n\n**Final Answer:**\n\n\\boxed{250} \n",
-  "greedy_output_token_ids": [], # List of int
-  "critical_token_index": 274,
-  "critical_token": {
-    "token_id": 235276,
-    "text": "0",
-    "probability": 0.4083376240567979
-  },
-  "majority_answer": "250"
-}
 
 def find_boxed_token_index(tokenizer, token_ids):
     # Binary search

@@ -1,0 +1,2 @@
+# vllm==0.6.3
+vllm==0.6.0 # https://github.com/vllm-project/vllm/issues/9608

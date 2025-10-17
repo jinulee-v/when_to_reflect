@@ -21,7 +21,6 @@ def greedy_decoding_with_tokenprobs(
             {"role": "user", "content": prompt}
         ]
     tokens = model.get_tokenizer().apply_chat_template(chat, add_generation_prompt=True)
-    print(tokens)
 
     sampling_params = SamplingParams(
         temperature=0.0,
