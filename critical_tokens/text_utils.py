@@ -14,7 +14,25 @@ def full_sent_prefixes(text, tokenizer: PreTrainedTokenizer):
     Returns:
         List[List[int]]: A list of token id prefixes ending at full sentence boundaries.
     """
-    sentences = sent_tokenize(text)
+    # sentences = sent_tokenize(text)
+    sentences = []
+    paren_stack = []
+    last_index = 0
+    for curr_index in range(len(text)):
+        if text[curr_index] in "([{":
+            paren_stack.append(text[curr_index])
+        elif text[curr_index] in ")]}":
+            if paren_stack and \
+                ((text[curr_index] == ")" and paren_stack[-1] == "(") or \
+                 (text[curr_index] == "]" and paren_stack[-1] == "[") or \
+                 (text[curr_index] == "}" and paren_stack[-1] == "{")):
+                paren_stack.pop()
+        if text[curr_index] == "\n" and len(paren_stack) == 0:
+            sentences.append(text[last_index:curr_index])
+            last_index = curr_index + 1
+        if curr_index > 0 and text[curr_index-1:curr_index+1] == "\n\n":
+            paren_stack = []
+    sentences.append(text[last_index:])
     tokens = tokenizer(text, truncation=False, max_length=None)["input_ids"]
 
     final_token_indices = []

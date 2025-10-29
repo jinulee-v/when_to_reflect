@@ -100,9 +100,9 @@ def main(args):
             result = find_critical_tokens_2(model, critical_token_data, prompt, system_prompt=system_prompt, threshold=args.critical_token_threshold) 
             results.append(result)
         except Exception as e:
-            raise e
-            # print(e.__class__, e)
-            # pass
+            # raise e
+            print(e.__class__, e)
+            pass
         model_alias = args.model.split("/")[-1]
         with open(f"data/critical_tokens_{args.dataset}_{model_alias}.jsonl", "w") as f:
             for result in results:

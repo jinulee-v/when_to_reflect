@@ -11,7 +11,7 @@ import json
 from tqdm import tqdm
 from collections import defaultdict
 
-def insert_reflection(model: LLM, critical_token_data: Union[Dict[str, Any], None], prompt: str, system_prompt: str = None, reflection_str="Wait", rollout_n: int = 64) -> dict:
+def insert_reflection(model: LLM, critical_token_data: Union[Dict[str, Any], None], prompt: str, system_prompt: str = None, reflection_str="\n\nWait", rollout_n: int = 64) -> dict:
     # 1. Greedy generation
     if critical_token_data is None:
         logging.info("Running greedy decoding with token probabilities...")
