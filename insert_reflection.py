@@ -5,13 +5,14 @@ from critical_tokens.prompts import *
 from critical_tokens.text_utils import full_sent_prefixes
 
 import re
+import os
 import logging
 import argparse
 import json
 from tqdm import tqdm
 from collections import defaultdict
 
-def insert_reflection(model: LLM, critical_token_data: Union[Dict[str, Any], None], prompt: str, system_prompt: str = None, reflection_str="\n\nWait", rollout_n: int = 64) -> dict:
+def insert_reflection(model: LLM, critical_token_data: Union[Dict[str, Any], None], prompt: str, system_prompt: str = None, reflection_str="Wait", rollout_n: int = 64) -> dict:
     # 1. Greedy generation
     if critical_token_data is None:
         logging.info("Running greedy decoding with token probabilities...")
@@ -50,17 +51,17 @@ def insert_reflection(model: LLM, critical_token_data: Union[Dict[str, Any], Non
         answer_dict = defaultdict(float)
         for answer in answers:
             answer_dict[answer] += 1 / len(answers)
-        print(answer_dict)
+        # print(answer_dict)
         reflection_data.append({
+            "reflection_str": reflection_str,
             "partial_response_tokens": partial_response_tokens,
             "answer": answer_dict,
             "majority_answer": max(answer_dict, key=answer_dict.get) if answer_dict else None,
         })
 
-    critical_token_data["insert_reflection_result"] = {
-        "reflection_str": reflection_str,
-        "reflection_trace": reflection_data
-    }
+    if "insert_reflection_result" not in critical_token_data:
+        critical_token_data["insert_reflection_result"] = {}
+    critical_token_data["insert_reflection_result"][reflection_str] = reflection_data
     return critical_token_data
 
 
@@ -74,7 +75,13 @@ def main(args):
     logging.info("Load dataset...")
     # Load critical token data
     dataset = []
-    with open(f"data/critical_tokens_{args.dataset}_{args.model.split('/')[-1]}.jsonl", "r") as f:
+    if os.path.exists(f"data/insert_reflection_{args.dataset}_{args.model.split('/')[-1]}.jsonl"):
+        logging.info("Loading from existing insert reflection file...")
+        file = f"data/insert_reflection_{args.dataset}_{args.model.split('/')[-1]}.jsonl"
+    else:
+        logging.info("Loading from existing critical tokens file...")
+        file = f"data/critical_tokens_{args.dataset}_{args.model.split('/')[-1]}.jsonl"
+    with open(file, "r") as f:
         for line in f:
             dataset.append(json.loads(line))
     # print stats
