@@ -7,6 +7,7 @@ import re
 import logging
 import argparse
 import json
+import os
 from tqdm import tqdm
 from collections import defaultdict
 
@@ -17,12 +18,13 @@ def find_critical_tokens_2(model: LLM, critical_token_data: Dict[str, Any], prom
     logging.info("Running greedy decoding with token probabilities...")
     greedy_result = greedy_decoding_with_tokenprobs(model, prompt, system_prompt=system_prompt, top_k=5)
     logging.info("Greedy decoding complete.")
-    logging.info(greedy_result["output"])
+    # logging.info(greedy_result["output"])
 
     # 2. Binary search
     logging.info("Running binary search for critical tokens...")
     binary_search_trace = []
     head, tail = 0, len(greedy_result['token_ids']) - 1
+    logging.info("Estimated # of sampling: %d", math.ceil(math.log2(len(greedy_result['token_ids']))))
     while head < tail:
         mid = (head + tail) // 2
         current_binary_search_step = {"index": mid}
@@ -38,9 +40,10 @@ def find_critical_tokens_2(model: LLM, critical_token_data: Dict[str, Any], prom
             pattern.findall(partial_response_str + response)[-1] if pattern.search(partial_response_str + response) else None
             for response in sampling_result
         ]
+        del sampling_result
         for answer in answers:
             answer_dict[answer] += 1 / len(answers)
-        logging.info(f"Answers and rollout probabilities: {answer_dict}")
+        # logging.info(f"Answers and rollout probabilities: {answer_dict}")
         # Check if any answer exceeds the threshold
         critical = any(prob >= threshold for answer, prob in answer_dict.items() if answer is not None)
         if critical:
@@ -67,9 +70,16 @@ def find_critical_tokens_2(model: LLM, critical_token_data: Dict[str, Any], prom
 
 def main(args):
     logging.info("Init VLLM...")
+    config = AutoConfig.from_pretrained(args.model, trust_remote_code=True)
+    if "gemma-3" in args.model:
+        from transformers import Gemma3TextConfig
+        config = Gemma3TextConfig.from_pretrained(args.model, trust_remote_code=True)
     model = LLM(
         model=args.model,
-        trust_remote_code=True, gpu_memory_utilization=args.gpu_memory_utilization)
+        trust_remote_code=True,
+        gpu_memory_utilization=args.gpu_memory_utilization,
+        max_model_len=min(HARD_LIMIT_MAX_MODEL_LEN, config.max_position_embeddings))
+    model_alias = args.model.split("/")[-1]
     logging.info("Complete!")
 
     logging.info("Load dataset...")
@@ -81,7 +91,23 @@ def main(args):
     
     logging.info("\n\n-------------------------------------\n\n")
 
-    results = []
+    # Wipe out any existing content
+    # with open(f"data/critical_tokens_{args.dataset}_{model_alias}.jsonl", "w") as f:
+    #     f.write("")
+    # Open current file, and curate a list of already processed ids
+    processed_ids = set()
+    if os.path.exists(f"data/critical_tokens_{args.dataset}_{model_alias}.jsonl"):
+        with open(f"data/critical_tokens_{args.dataset}_{model_alias}.jsonl", "r") as f:
+            for line in f:
+                try:
+                    data = json.loads(line)
+                    processed_ids.add(data["example"]["id"])
+                except:
+                    continue
+    # Filter dataset to only include unprocessed examples
+    dataset = [example for example in dataset if example["id"] not in processed_ids]
+    logging.info(f"Processing {len(dataset)} examples after filtering already processed {len(processed_ids)} examples.")
+
     for i, example in enumerate(tqdm(dataset)):
         prompt = example["question"]
         system_prompt=SYSTEM_PROMPT[args.dataset]
@@ -97,16 +123,13 @@ def main(args):
                 },
                 "example": example,
             }
-            result = find_critical_tokens_2(model, critical_token_data, prompt, system_prompt=system_prompt, threshold=args.critical_token_threshold) 
-            results.append(result)
+            result = find_critical_tokens_2(model, critical_token_data, prompt, system_prompt=system_prompt, threshold=args.critical_token_threshold)
         except Exception as e:
             # raise e
             print(e.__class__, e)
             pass
-        model_alias = args.model.split("/")[-1]
-        with open(f"data/critical_tokens_{args.dataset}_{model_alias}.jsonl", "w") as f:
-            for result in results:
-                f.write(json.dumps(result, ensure_ascii=False) + "\n")
+        with open(f"data/critical_tokens_{args.dataset}_{model_alias}.jsonl", "a") as f:
+            f.write(json.dumps(result, ensure_ascii=False) + "\n")
 
 
 if __name__ == "__main__":
@@ -125,9 +148,9 @@ if __name__ == "__main__":
     parser.add_argument("--critical_token_threshold", type=float, default=0.95, help="Threshold for determining critical tokens")
 
     args = parser.parse_args()
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
     if args.debug:
-        logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
         model = LLM(model="google/gemma-2-2b-it", trust_remote_code=True, gpu_memory_utilization=0.6)
         print(find_critical_tokens_2(
             model=model,

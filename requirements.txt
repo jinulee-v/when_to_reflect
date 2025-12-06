@@ -1,2 +1,9 @@
-# vllm==0.6.3
-vllm==0.6.0 # https://github.com/vllm-project/vllm/issues/9608
+torch==2.9.0
+vllm==0.11.2
+vllm-flash-attn==2.6.2
+transformers==4.57.1
+datasets==4.0.0
+
+nltk
+tqdm
+python-dotenv

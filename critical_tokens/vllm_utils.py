@@ -6,6 +6,8 @@ import math
 import dotenv
 dotenv.load_dotenv()
 
+HARD_LIMIT_MAX_MODEL_LEN = 4096
+
 def greedy_decoding_with_tokenprobs(
     model: LLM,
     prompt: str,
@@ -26,7 +28,7 @@ def greedy_decoding_with_tokenprobs(
         temperature=0.0,
         stop=None,
         logprobs=top_k,
-        max_tokens=model.get_tokenizer().model_max_length - len(tokens),
+        max_tokens=min(HARD_LIMIT_MAX_MODEL_LEN, model.get_tokenizer().model_max_length) - len(tokens) - 5, # leave some buffer
     )
 
     response = model.generate(prompts=TokensPrompt(prompt_token_ids=tokens), sampling_params=sampling_params, use_tqdm=False)[0]
@@ -73,18 +75,26 @@ def sampling_from_middle(
     tokens = model.get_tokenizer().apply_chat_template(chat, add_generation_prompt=False, continue_final_message=True)
     tokens += partial_response_tokens
 
+    if min(HARD_LIMIT_MAX_MODEL_LEN, model.get_tokenizer().model_max_length) - len(tokens) - 5 < 1:
+        return {
+            "response_strs": ["" for _ in range(n)]
+        }
     sampling_params = SamplingParams(
         n=n, # independently sample n responses.
         temperature=temperature,
-        max_tokens=model.get_tokenizer().model_max_length - len(tokens),
+        max_tokens=min(HARD_LIMIT_MAX_MODEL_LEN, model.get_tokenizer().model_max_length) - len(tokens) - 5, # leave some buffer
     )
 
-    responses = model.generate(prompts=TokensPrompt(prompt_token_ids=tokens), sampling_params=sampling_params, use_tqdm=False)[0].outputs
-    
-    # Return response strings
-    response_strs = []
-    for response in responses:
-        response_strs.append(response.text)
+    try:
+        responses = model.generate(prompts=TokensPrompt(prompt_token_ids=tokens), sampling_params=sampling_params, use_tqdm=False)[0].outputs
+        
+        # Return response strings
+        response_strs = []
+        for response in responses:
+            response_strs.append(response.text)
+            
+    except Exception as e:
+        response_strs = ["" for _ in range(n)]
 
     return {
         "response_strs": response_strs

@@ -6,6 +6,7 @@ from critical_tokens.text_utils import full_sent_prefixes
 
 import re
 import os
+import shutil
 import logging
 import argparse
 import json
@@ -27,11 +28,16 @@ def insert_reflection(model: LLM, critical_token_data: Union[Dict[str, Any], Non
     logging.info(f"Number of full sentence prefixes: {len(full_sent_prefixes_list)}")
 
     # 3. Compute reflection tokens
-    reflection_tokens = model.get_tokenizer()(reflection_str, add_special_tokens=False)["input_ids"]
+    if reflection_str == "":
+        reflection_tokens = []
+    else:
+        reflection_tokens = model.get_tokenizer()(reflection_str, add_special_tokens=False)["input_ids"]
 
     # Sample rollouts from each prefix + reflection tokens
+    logging.info(f"Total {len(full_sent_prefixes_list)} prefixes to process.")
     reflection_data = []
-    for prefix in full_sent_prefixes_list:
+    for i, prefix in enumerate(full_sent_prefixes_list):
+        logging.info(f"Processing prefix {i + 1}/{len(full_sent_prefixes_list)}...")
         partial_response_tokens = prefix + reflection_tokens
         partial_response_str = model.get_tokenizer().decode(partial_response_tokens)
         sampling_result = sampling_from_middle(
@@ -48,6 +54,7 @@ def insert_reflection(model: LLM, critical_token_data: Union[Dict[str, Any], Non
             pattern.findall(partial_response_str + response)[-1] if pattern.search(partial_response_str + response) else None
             for response in sampling_result["response_strs"]
         ]
+        del sampling_result
         answer_dict = defaultdict(float)
         for answer in answers:
             answer_dict[answer] += 1 / len(answers)
@@ -67,9 +74,13 @@ def insert_reflection(model: LLM, critical_token_data: Union[Dict[str, Any], Non
 
 def main(args):
     logging.info("Init VLLM...")
+    config = AutoConfig.from_pretrained(args.model, trust_remote_code=True)
     model = LLM(
         model=args.model,
-        trust_remote_code=True, gpu_memory_utilization=args.gpu_memory_utilization)
+        trust_remote_code=True,
+        gpu_memory_utilization=args.gpu_memory_utilization,
+        max_model_len=min(HARD_LIMIT_MAX_MODEL_LEN, config.max_position_embeddings))
+    model_alias = args.model.split("/")[-1]
     logging.info("Complete!")
 
     logging.info("Load dataset...")
@@ -90,22 +101,44 @@ def main(args):
     
     logging.info("\n\n-------------------------------------\n\n")
 
-    results = []
+    # Create a new insert reflection file
+    processed_ids = set()
+    if os.path.exists(f"data/insert_reflection_{args.dataset}_{model_alias}_temp.jsonl"):
+        with open(f"data/insert_reflection_{args.dataset}_{model_alias}_temp.jsonl", "r") as f:
+            for line in f:
+                try:
+                    data = json.loads(line)
+                    if "insert_reflection_result" in data and args.reflection_str in data["insert_reflection_result"]:
+                        processed_ids.add(data["example"]["id"])
+                except:
+                    continue
+    # Wipe out temp file and rewrite already processed examples
+    with open(f"data/insert_reflection_{args.dataset}_{model_alias}_temp.jsonl", "w") as f:
+        for data in dataset:
+            if data["example"]["id"] in processed_ids:
+                f.write(json.dumps(data, ensure_ascii=False) + "\n")
+    # Filter dataset to only include unprocessed examples
+    dataset = [example for example in dataset if example["example"]["id"] not in processed_ids]
+    logging.info(f"Processing {len(dataset)} examples after filtering already processed {len(processed_ids)} examples.")
+
+
     for i, critical_token_data in enumerate(tqdm(dataset)):
+        logging.info(f"Data idx {i}")
         prompt = critical_token_data["example"]["question"]
         system_prompt=SYSTEM_PROMPT[args.dataset]
         
         try:
             result = insert_reflection(model, critical_token_data=critical_token_data, prompt=prompt, system_prompt=system_prompt, reflection_str=args.reflection_str, rollout_n=args.rollout_n) 
-            results.append(result)
         except Exception as e:
             raise e
             # print(e.__class__, e)
             # pass
-        model_alias = args.model.split("/")[-1]
-        with open(f"data/insert_reflection_{args.dataset}_{model_alias}.jsonl", "w") as f:
-            for result in results:
-                f.write(json.dumps(result, ensure_ascii=False) + "\n")
+        with open(f"data/insert_reflection_{args.dataset}_{model_alias}_temp.jsonl", "a") as f:
+            f.write(json.dumps(result, ensure_ascii=False) + "\n")
+    # copy temp file to main file using shutil.copyfile for cross-platform compatibility
+    logging.info("Copying temp file to main file...")
+    shutil.copyfile(f"data/insert_reflection_{args.dataset}_{model_alias}_temp.jsonl", f"data/insert_reflection_{args.dataset}_{model_alias}.jsonl")
+    logging.info("Copy complete.")
 
 
 if __name__ == "__main__":
@@ -124,9 +157,9 @@ if __name__ == "__main__":
     parser.add_argument("--rollout_n", type=int, default=64, help="Number of rollouts for critical token analysis")
 
     args = parser.parse_args()
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
     if args.debug:
-        logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
         model = LLM(model="google/gemma-2-2b-it", trust_remote_code=True, gpu_memory_utilization=0.6, max_model_len=4096)
         result = insert_reflection(
             model=model,
