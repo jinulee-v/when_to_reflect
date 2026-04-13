@@ -16,6 +16,14 @@ SYSTEM_PROMPT_GPQA = r"""Solve the following problem.
 Problem:
 """
 
+SYSTEM_PROMPT_GPQA_DEEPSEEK_DISTILL = r"""Solve the following problem.
+- Let's think step by step. Present the solution first and provide the answer at the end.
+- Make sure to put the answer (and only answer) inside \boxed{}.
+- Final answer should be either \boxed{A}, \boxed{B}, \boxed{C}, or \boxed{D}.
+
+Problem:
+"""
+
 SYSTEM_PROMPT = {
     # "gsm8k": SYSTEM_PROMPT_MATH,
     "math500": SYSTEM_PROMPT_MATH,

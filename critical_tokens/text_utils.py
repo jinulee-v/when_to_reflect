@@ -1,5 +1,5 @@
+import bisect
 import logging
-from nltk import sent_tokenize
 from transformers import PreTrainedTokenizer
 
 def full_sent_prefixes(text, tokenizer: PreTrainedTokenizer):
@@ -14,39 +14,33 @@ def full_sent_prefixes(text, tokenizer: PreTrainedTokenizer):
     Returns:
         List[List[int]]: A list of token id prefixes ending at full sentence boundaries.
     """
-    # sentences = sent_tokenize(text)
-    sentences = []
-    paren_stack = []
-    last_index = 0
-    for curr_index in range(len(text)):
-        if text[curr_index] in "([{":
-            paren_stack.append(text[curr_index])
-        elif text[curr_index] in ")]}" and len(paren_stack) > 0:
-            paren_stack.pop()
-        if curr_index > 0 and text[curr_index-1:curr_index+1] == "\n\n" and len(paren_stack) == 0:
-            sentences.append(text[last_index:curr_index])
-            last_index = curr_index + 1
-    sentences.append(text[last_index:])
-    tokens = tokenizer(text, truncation=False, max_length=None)["input_ids"]
+    encoding = tokenizer(text, truncation=False, max_length=None, return_offsets_mapping=True)
+    tokens = encoding["input_ids"]
+    offsets = encoding["offset_mapping"]
+    tokenized_text_length = len(tokens)
 
-    final_token_indices = []
-    curr_string = ""
-    curr_sent_id = 0
-    for i in range(len(tokens)):
-        curr_string += tokenizer.decode(tokens[i], skip_special_tokens=True)
+    # Collect all \n\n boundary positions, then subsample at most 50 evenly.
+    MAX_SAMPLES = 50
+    all_boundaries = []
+    for curr_index in range(1, len(text)):
+        if text[curr_index - 1 : curr_index + 1] == "\n\n":
+            all_boundaries.append(curr_index)
 
-        if curr_string.strip().endswith(sentences[curr_sent_id].strip()):
-            final_token_indices.append(i)
-            curr_sent_id += 1
-        elif sentences[curr_sent_id] in curr_string:
-            # already passed the end of the sentence
-            curr_sent_id += 1
-        if curr_sent_id >= len(sentences):
-            break
+    if len(all_boundaries) > MAX_SAMPLES - 1:
+        step = len(all_boundaries) / (MAX_SAMPLES - 1)
+        all_boundaries = [all_boundaries[round(i * step)] for i in range(MAX_SAMPLES - 1)]
+
+    boundaries = all_boundaries + [len(text)]
+
+    # For each boundary, use token_to_chars offsets to find the last token
+    # whose end character position falls at or before the boundary.
+    token_char_ends = [end for _, end in offsets]
 
     prefixes = []
-    for end in final_token_indices:
-        prefixes.append(tokens[:end + 1])
+    for boundary in boundaries:
+        idx = bisect.bisect_right(token_char_ends, boundary) - 1
+        if idx >= 0:
+            prefixes.append(tokens[: idx + 1])
     return prefixes
 
 if __name__ == "__main__":

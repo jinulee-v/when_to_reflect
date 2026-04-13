@@ -79,7 +79,8 @@ def main(args):
         model=args.model,
         trust_remote_code=True,
         gpu_memory_utilization=args.gpu_memory_utilization,
-        max_model_len=min(HARD_LIMIT_MAX_MODEL_LEN, config.max_position_embeddings))
+        max_model_len=min(HARD_LIMIT_MAX_MODEL_LEN, config.max_position_embeddings),
+        tensor_parallel_size=args.tp)
     model_alias = args.model.split("/")[-1]
     logging.info("Complete!")
 
@@ -148,7 +149,8 @@ if __name__ == "__main__":
 
     # vLLM args
     parser.add_argument("--model", type=str, default="google/gemma-2-2b-it", help="Model name to use with VLLM")
-    parser.add_argument("--gpu_memory_utilization", type=float, default=0.6, help="GPU memory utilization for VLLM")
+    parser.add_argument("--gpu_memory_utilization", type=float, default=0.8, help="GPU memory utilization for VLLM")
+    parser.add_argument("--tp", type=int, default=1, help="Tensor parallelism")
     # Dataset args
     parser.add_argument("--dataset", type=str, default="aime2024", choices=SYSTEM_PROMPT.keys(), help="Dataset name to load")
     # parser.add_argument("--split", type=str, default="aime2024", help="Dataset split to use")
@@ -160,7 +162,7 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
     if args.debug:
-        model = LLM(model="google/gemma-2-2b-it", trust_remote_code=True, gpu_memory_utilization=0.6, max_model_len=4096)
+        model = LLM(model="google/gemma-2-2b-it", trust_remote_code=True, gpu_memory_utilization=0.6, max_model_len=4096, tensor_parallel_size=args.tp)
         result = insert_reflection(
             model=model,
             critical_token_data=None,

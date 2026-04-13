@@ -11,14 +11,14 @@ import os
 from tqdm import tqdm
 from collections import defaultdict
 
-def find_critical_tokens_2(model: LLM, critical_token_data: Dict[str, Any], prompt: str, system_prompt: str = None, threshold: float = 0.95, rollout_n: int = 64) -> dict:
+def find_critical_tokens_2(model: LLM, greedy_result, critical_token_data: Dict[str, Any], prompt: str, system_prompt: str = None, threshold: float = 0.95, rollout_n: int = 64) -> dict:
     # Without top-k tokens
 
-    # 1. Greedy generation
-    logging.info("Running greedy decoding with token probabilities...")
-    greedy_result = greedy_decoding_with_tokenprobs(model, prompt, system_prompt=system_prompt, top_k=5)
-    logging.info("Greedy decoding complete.")
-    # logging.info(greedy_result["output"])
+    # 1. Greedy generation -> fetch from args.base_model
+    # logging.info("Running greedy decoding with token probabilities...")
+    # greedy_result = greedy_decoding_with_tokenprobs(model, prompt, system_prompt=system_prompt, top_k=5)
+    # logging.info("Greedy decoding complete.")
+    # # logging.info(greedy_result["output"])
 
     # 2. Binary search
     logging.info("Running binary search for critical tokens...")
@@ -69,6 +69,16 @@ def find_critical_tokens_2(model: LLM, critical_token_data: Dict[str, Any], prom
 
 
 def main(args):
+    # Load base_model's critical token data for greedy_result
+    logging.info("Loading base model's critical token data...")
+    base_model_alias = args.base_model.split("/")[-1]
+    with open(f"data/critical_tokens_{args.dataset}_{base_model_alias}.jsonl", "r") as f:
+        base_model_critical_token_data = {}
+        for line in f:
+            data = json.loads(line)
+            base_model_critical_token_data[data["example"]["id"]] = data
+    logging.info("Complete! Loaded %d examples.", len(base_model_critical_token_data))
+    
     logging.info("Init VLLM...")
     config = AutoConfig.from_pretrained(args.model, trust_remote_code=True)
     if "gemma-3" in args.model:
@@ -97,8 +107,8 @@ def main(args):
     #     f.write("")
     # Open current file, and curate a list of already processed ids
     processed_ids = set()
-    if os.path.exists(f"data/critical_tokens_{args.dataset}_{model_alias}.jsonl"):
-        with open(f"data/critical_tokens_{args.dataset}_{model_alias}.jsonl", "r") as f:
+    if os.path.exists(f"data/basemodeltrace_critical_tokens_{args.dataset}_{model_alias}.jsonl"):
+        with open(f"data/basemodeltrace_critical_tokens_{args.dataset}_{model_alias}.jsonl", "r") as f:
             for line in f:
                 try:
                     data = json.loads(line)
@@ -126,12 +136,13 @@ def main(args):
                 },
                 "example": example,
             }
-            result = find_critical_tokens_2(model, critical_token_data, prompt, system_prompt=system_prompt, threshold=args.critical_token_threshold)
+            greedy_result = base_model_critical_token_data[example["id"]]["greedy_result"]
+            result = find_critical_tokens_2(model, greedy_result, critical_token_data, prompt, system_prompt=system_prompt, threshold=args.critical_token_threshold)
         except Exception as e:
             # raise e
             print(e.__class__, e)
             pass
-        with open(f"data/critical_tokens_{args.dataset}_{model_alias}.jsonl", "a") as f:
+        with open(f"data/basemodeltrace_critical_tokens_{args.dataset}_{model_alias}.jsonl", "a") as f:
             f.write(json.dumps(result, ensure_ascii=False) + "\n")
 
 
@@ -141,7 +152,8 @@ if __name__ == "__main__":
     parser.add_argument("--debug", action="store_true", help="Enable debug mode for more verbose output")
 
     # vLLM args
-    parser.add_argument("--model", type=str, default="google/gemma-2-2b-it", help="Model name to use with VLLM")
+    parser.add_argument("--model", type=str, default="movefast/Qwen2.5-7B-Instruct-GRPO", help="Model name to use with VLLM")
+    parser.add_argument("--base_model", type=str, default="Qwen/Qwen2.5-7B-Instruct", help="Base model name to fetch the reasoning trace from")
     parser.add_argument("--gpu_memory_utilization", type=float, default=0.8, help="GPU memory utilization for VLLM")
     parser.add_argument("--tp", type=int, default=1, help="Tensor parallelism")
     # Dataset args

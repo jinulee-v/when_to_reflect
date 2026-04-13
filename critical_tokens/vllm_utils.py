@@ -6,7 +6,7 @@ import math
 import dotenv
 dotenv.load_dotenv()
 
-HARD_LIMIT_MAX_MODEL_LEN = 4096
+HARD_LIMIT_MAX_MODEL_LEN = 32768
 
 def greedy_decoding_with_tokenprobs(
     model: LLM,
